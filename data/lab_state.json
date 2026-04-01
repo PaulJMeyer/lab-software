@@ -1,10 +1,14 @@
 [
   {
-    "sample_id": "123456789",
-    "sample_dna": "TACGAGCGAGTCAATGCAATTCA"
-  },
-  {
     "sample_id": "987654321",
     "sample_dna": "ACGCTGATGCTAGCCTATCGATCGGATATCGCGAT"
+  },
+  {
+    "sample_id": "897654312",
+    "sample_dna": "AGCTAGTGTACACAGTACACAGTACAGTAG"
+  },
+  {
+    "sample_id": "123456789",
+    "sample_dna": "ACGTN-RY"
   }
 ]

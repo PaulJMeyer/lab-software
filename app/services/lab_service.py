@@ -20,3 +20,11 @@ class LabService:
 
     def set_state(self, samples_dict):
         self._samples = samples_dict
+
+    def delete_sample(self, sample_id: str):
+        if sample_id not in self._samples:
+            raise ValueError(f"Sample ID nicht gefunden: {sample_id}")
+        del self._samples[sample_id]
+
+    def find_sample(self, sample_id: str):
+        return self._samples.get(sample_id, None)
