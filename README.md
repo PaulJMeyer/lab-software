@@ -32,6 +32,9 @@ python main.py search --id "123456789"
 
 # Delete sample
 python main.py delete --id "123456789"
+
+# Update sample
+python main.py update --id "123456789" --dna "ACGTNNRRY"
 ```
 
 ---
@@ -51,8 +54,8 @@ python main.py delete --id "123456789"
 
 ## Roadmap
 
-- [ ] Unit tests (pytest)
-- [ ] Sample update
+- [x] Unit tests (pytest)
+- [x] Sample update
 - [ ] Pydantic-based validation
 - [ ] Export (CSV, Excel)
 - [ ] DNA analysis tools:

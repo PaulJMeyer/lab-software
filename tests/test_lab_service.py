@@ -43,6 +43,29 @@ class TestListSamples:
         assert set(service.list_samples()) == {sample_a, sample_b}
 
 
+class TestUpdateSample:
+
+    def test_update_replaces_dna(self, service, sample_a):
+        service.add_sample(sample_a)
+        updated = service.update_sample("111111111", "TTTT")
+        assert updated.sample_dna == "TTTT"
+        assert service.find_sample("111111111").sample_dna == "TTTT"
+
+    def test_update_keeps_id_unchanged(self, service, sample_a):
+        service.add_sample(sample_a)
+        updated = service.update_sample("111111111", "TTTT")
+        assert updated.sample_id == "111111111"
+
+    def test_update_unknown_id_raises(self, service):
+        with pytest.raises(ValueError):
+            service.update_sample("999999999", "TTTT")
+
+    def test_update_with_invalid_dna_raises(self, service, sample_a):
+        service.add_sample(sample_a)
+        with pytest.raises(ValueError):
+            service.update_sample("111111111", "XYZ")
+
+
 class TestDeleteSample:
 
     def test_delete_existing_sample(self, service, sample_a):

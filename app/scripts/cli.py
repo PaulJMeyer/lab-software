@@ -47,6 +47,19 @@ def list_samples():
     click.echo(f"\n{len(samples)} Sample(s) insgesamt.")
 
 @cli.command()
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample-ID zum Aktualisieren")
+@click.option("--dna", "sample_dna", required=True, prompt="Neue DNA-Sequenz", help="Neue DNA-Sequenz des Samples")
+def update(sample_id, sample_dna):
+    """DNA-Sequenz eines bestehenden Samples aktualisieren"""
+    service = get_service()
+    try:
+        service.update_sample(sample_id, sample_dna)
+        save_samples(DATA_PATH, service.get_state())
+        click.echo(click.style(f"✓ Sample '{sample_id}' erfolgreich aktualisiert.", fg="green"))
+    except ValueError as e:
+        click.echo(click.style(f"✗ Fehler: {e}", fg="red"))
+
+@cli.command()
 @click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample-ID zum Löschen")
 def delete(sample_id):
     """Sample anhand der ID löschen"""
