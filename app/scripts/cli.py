@@ -85,5 +85,5 @@ def search(sample_id):
         click.echo(f"DNA:      {sample.sample_dna}")
         click.echo(f"Length:   {len(sample.sample_dna)} bases")
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     cli()

@@ -1,0 +1,97 @@
+import pytest
+from click.testing import CliRunner
+
+from app.scripts.cli import cli
+
+
+@pytest.fixture
+def runner():
+    return CliRunner()
+
+
+class TestAddCommand:
+
+    def test_add_valid_sample_succeeds(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            assert result.exit_code == 0
+            assert "added successfully" in result.output
+
+    def test_add_invalid_dna_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGTX"])
+            assert result.exit_code == 0
+            assert "Error" in result.output
+
+    def test_add_duplicate_id_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["add", "--id", "123456789", "--dna", "TTTT"])
+            assert "Error" in result.output
+
+
+class TestListCommand:
+
+    def test_list_with_no_samples(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["list"])
+            assert "No samples available" in result.output
+
+    def test_list_shows_added_sample(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["list"])
+            assert "123456789" in result.output
+            assert "1 sample(s) total" in result.output
+
+
+class TestUpdateCommand:
+
+    def test_update_existing_sample_succeeds(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["update", "--id", "123456789", "--dna", "TTTT"])
+            assert "updated successfully" in result.output
+
+    def test_update_unknown_id_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["update", "--id", "999999999", "--dna", "TTTT"])
+            assert "Error" in result.output
+
+
+class TestDeleteCommand:
+
+    def test_delete_existing_sample_succeeds(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["delete", "--id", "123456789"])
+            assert "deleted successfully" in result.output
+
+    def test_delete_unknown_id_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["delete", "--id", "999999999"])
+            assert "Error" in result.output
+
+
+class TestSearchCommand:
+
+    def test_search_existing_sample_shows_details(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["search", "--id", "123456789"])
+            assert "123456789" in result.output
+            assert "ACGT" in result.output
+
+    def test_search_unknown_id_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["search", "--id", "999999999"])
+            assert "No sample found" in result.output
+
+
+class TestPersistenceAcrossInvocations:
+
+    def test_data_persists_between_cli_calls(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["search", "--id", "123456789"])
+            assert "ACGT" in result.output
