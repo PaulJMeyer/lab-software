@@ -23,14 +23,14 @@ class LabService:
 
     def update_sample(self, sample_id: str, sample_dna: str):
         if sample_id not in self._samples:
-            raise ValueError(f"Sample ID nicht gefunden: {sample_id}")
+            raise ValueError(f"Sample ID not found: {sample_id}")
         updated = Sample(sample_id=sample_id, sample_dna=sample_dna)
         self._samples[sample_id] = updated
         return updated
 
     def delete_sample(self, sample_id: str):
         if sample_id not in self._samples:
-            raise ValueError(f"Sample ID nicht gefunden: {sample_id}")
+            raise ValueError(f"Sample ID not found: {sample_id}")
         del self._samples[sample_id]
 
     def find_sample(self, sample_id: str):

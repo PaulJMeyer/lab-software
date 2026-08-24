@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from app.domain.models import Sample
 from app.services.lab_service import LabService
@@ -11,12 +12,12 @@ def service():
 
 @pytest.fixture
 def sample_a():
-    return Sample("111111111", "ACGT")
+    return Sample(sample_id="111111111", sample_dna="ACGT")
 
 
 @pytest.fixture
 def sample_b():
-    return Sample("222222222", "TTTT")
+    return Sample(sample_id="222222222", sample_dna="TTTT")
 
 
 class TestAddSample:
@@ -27,7 +28,7 @@ class TestAddSample:
 
     def test_add_duplicate_id_raises(self, service, sample_a):
         service.add_sample(sample_a)
-        duplicate = Sample("111111111", "TTTT")
+        duplicate = Sample(sample_id="111111111", sample_dna="TTTT")
         with pytest.raises(ValueError):
             service.add_sample(duplicate)
 
@@ -40,7 +41,10 @@ class TestListSamples:
     def test_list_returns_all_added_samples(self, service, sample_a, sample_b):
         service.add_sample(sample_a)
         service.add_sample(sample_b)
-        assert set(service.list_samples()) == {sample_a, sample_b}
+        samples = service.list_samples()
+        assert len(samples) == 2
+        assert sample_a in samples
+        assert sample_b in samples
 
 
 class TestUpdateSample:
@@ -62,7 +66,7 @@ class TestUpdateSample:
 
     def test_update_with_invalid_dna_raises(self, service, sample_a):
         service.add_sample(sample_a)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError):
             service.update_sample("111111111", "XYZ")
 
 

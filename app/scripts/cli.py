@@ -1,5 +1,6 @@
 import click
 from pathlib import Path
+from pydantic import ValidationError
 from app.domain.models import Sample
 from app.services.lab_service import LabService
 from app.io.storage_json import save_samples, load_samples
@@ -18,71 +19,71 @@ def cli():
     pass
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Eindeutige Sample-ID")
-@click.option("--dna", "sample_dna", required=True, prompt="DNA-Sequenz", help="DNA-Sequenz des Samples")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Unique sample ID")
+@click.option("--dna", "sample_dna", required=True, prompt="DNA sequence", help="DNA sequence of the sample")
 def add(sample_id, sample_dna):
-    """Neues Sample registrieren"""
+    """Register a new sample"""
     service = get_service()
-    sample = Sample(sample_id=sample_id, sample_dna=sample_dna)
     try:
+        sample = Sample(sample_id=sample_id, sample_dna=sample_dna)
         service.add_sample(sample)
         save_samples(DATA_PATH, service.get_state())
-        click.echo(click.style(f"✓ Sample '{sample_id}' erfolgreich hinzugefügt.", fg="green"))
-    except ValueError as e:
-        click.echo(click.style(f"✗ Fehler: {e}", fg="red"))
+        click.echo(click.style(f"✓ Sample '{sample_id}' added successfully.", fg="green"))
+    except (ValidationError, ValueError) as e:
+        click.echo(click.style(f"✗ Error: {e}", fg="red"))
 
 @cli.command(name="list")
 def list_samples():
-    """Alle registrierten Samples anzeigen"""
+    """List all registered samples"""
     service = get_service()
     samples = service.list_samples()
     if not samples:
-        click.echo("Keine Samples vorhanden.")
+        click.echo("No samples available.")
         return
-    click.echo(f"\n{'ID':<20} {'DNA-Länge':<12} {'Sequenz (Vorschau)'}")
+    click.echo(f"\n{'ID':<20} {'DNA length':<12} {'Sequence (preview)'}")
     click.echo("-" * 55)
     for s in samples:
         preview = s.sample_dna[:20] + "..." if len(s.sample_dna) > 20 else s.sample_dna
         click.echo(f"{s.sample_id:<20} {len(s.sample_dna):<12} {preview}")
-    click.echo(f"\n{len(samples)} Sample(s) insgesamt.")
+    click.echo(f"\n{len(samples)} sample(s) total.")
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample-ID zum Aktualisieren")
-@click.option("--dna", "sample_dna", required=True, prompt="Neue DNA-Sequenz", help="Neue DNA-Sequenz des Samples")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to update")
+@click.option("--dna", "sample_dna", required=True, prompt="New DNA sequence", help="New DNA sequence of the sample")
 def update(sample_id, sample_dna):
-    """DNA-Sequenz eines bestehenden Samples aktualisieren"""
+    """Update the DNA sequence of an existing sample"""
     service = get_service()
     try:
         service.update_sample(sample_id, sample_dna)
         save_samples(DATA_PATH, service.get_state())
-        click.echo(click.style(f"✓ Sample '{sample_id}' erfolgreich aktualisiert.", fg="green"))
-    except ValueError as e:
-        click.echo(click.style(f"✗ Fehler: {e}", fg="red"))
+        click.echo(click.style(f"✓ Sample '{sample_id}' updated successfully.", fg="green"))
+    except (ValidationError, ValueError) as e:
+        click.echo(click.style(f"✗ Error: {e}", fg="red"))
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample-ID zum Löschen")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to delete")
 def delete(sample_id):
-    """Sample anhand der ID löschen"""
+    """Delete a sample by ID"""
     service = get_service()
     try:
         service.delete_sample(sample_id)
         save_samples(DATA_PATH, service.get_state())
-        click.echo(click.style(f"✓ Sample '{sample_id}' erfolgreich gelöscht.", fg="green"))
-    except ValueError as e:
-        click.echo(click.style(f"✗ Fehler: {e}", fg="red"))
+        click.echo(click.style(f"✓ Sample '{sample_id}' deleted successfully.", fg="green"))
+    except (ValidationError, ValueError) as e:
+        click.echo(click.style(f"✗ Error: {e}", fg="red"))
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample-ID zum Suchen")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to search for")
 def search(sample_id):
-    """Sample anhand der ID suchen"""
+    """Search for a sample by ID"""
     service = get_service()
     sample = service.find_sample(sample_id)
     if sample is None:
-        click.echo(click.style(f"✗ Kein Sample mit ID '{sample_id}' gefunden.", fg="red"))
+        click.echo(click.style(f"✗ No sample found with ID '{sample_id}'.", fg="red"))
     else:
         click.echo(f"\nID:       {sample.sample_id}")
         click.echo(f"DNA:      {sample.sample_dna}")
-        click.echo(f"Länge:    {len(sample.sample_dna)} Basen")
+        click.echo(f"Length:   {len(sample.sample_dna)} bases")
 
 if __name__ == "__main__":
     cli()

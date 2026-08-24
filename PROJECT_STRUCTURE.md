@@ -1,24 +1,29 @@
 # Project Structure – lab-software
 
-Kurzüberblick über Aufbau, Module und Verantwortlichkeiten des `lab-software`-Projekts (Stand: erste dokumentierte Version).
+Brief overview of the layout, modules, and responsibilities of the `lab-software` project.
 
-## Verzeichnisbaum
+## Directory Tree
 
 ```
 lab-software/
 ├── app/
 │   ├── domain/
-│   │   └── models.py         # Datenmodelle (Sample) inkl. Validierung
+│   │   └── models.py         # Data models (Sample) incl. validation
 │   ├── io/
-│   │   └── storage_json.py   # Persistenz: Laden/Speichern als JSON
+│   │   └── storage_json.py   # Persistence: load/save as JSON
 │   ├── scripts/
-│   │   ├── cli.py            # Click-basierte CLI-Kommandos
-│   │   └── demo.py           # Manuelles Demo-/Testskript
+│   │   ├── cli.py            # Click-based CLI commands
+│   │   └── demo.py           # Manual demo/test script
 │   ├── services/
-│   │   └── lab_service.py    # Business-Logik / In-Memory-Verwaltung
-│   └── main.py                # Einstiegspunkt (ruft cli() auf)
+│   │   └── lab_service.py    # Business logic / in-memory management
+│   └── main.py                # Entry point (calls cli())
+├── tests/
+│   ├── __init__.py
+│   ├── test_models.py        # Tests for Sample validation
+│   ├── test_lab_service.py   # Tests for LabService
+│   └── test_storage_json.py  # Tests for JSON persistence
 ├── data/
-│   └── lab_state.json        # persistenter Zustand (gitignored)
+│   └── lab_state.json        # persisted state (gitignored)
 ├── pyproject.toml
 ├── uv.lock
 ├── README.md
@@ -26,66 +31,74 @@ lab-software/
 └── .gitignore
 ```
 
-## Architektur
+## Architecture
 
-Klassische 3-Schichten-Trennung:
+Classic 3-layer separation:
 
-- **domain** – reine Datenmodelle, kein I/O, keine Abhängigkeit zu anderen App-Schichten
-- **services** – Geschäftslogik, hält den In-Memory-Zustand (`LabService`)
-- **io** – Persistenzschicht, wandelt Domain-Objekte in JSON und zurück
-- **scripts** – Anwendungseinstiegspunkte (CLI, Demo)
+- **domain** – pure data models, no I/O, no dependency on other app layers
+- **services** – business logic, holds the in-memory state (`LabService`)
+- **io** – persistence layer, converts domain objects to/from JSON
+- **scripts** – application entry points (CLI, demo)
 
-Abhängigkeitsrichtung: `scripts → services → domain`, sowie `scripts → io → domain`. `services` kennt `io` nicht direkt (Persistenz wird von der CLI orchestriert, nicht vom Service selbst).
+Dependency direction: `scripts → services → domain`, as well as `scripts → io → domain`. `services` does not know about `io` directly (persistence is orchestrated by the CLI, not by the service itself).
 
-## Module im Detail
+## Modules in Detail
 
 ### `app/domain/models.py`
-- **`Sample`**: Kernentität mit `sample_id` (exakt 9 Zeichen, nur Ziffern 1–9) und `sample_dna` (IUPAC-Zeichensatz: `ACGTNRYKMSWBDHV-`).
-- Validierung erfolgt im Konstruktor (`_validate_id`, `_validate_dna`); wirft `ValueError` bei ungültigen Eingaben.
-- DNA-Sequenz wird automatisch in Großbuchstaben normalisiert.
+- **`Sample`**: core entity with `sample_id` (exactly 9 characters, digits 1–9 only) and `sample_dna` (IUPAC character set: `ACGTNRYKMSWBDHV-`).
+- Validation happens in the constructor (`_validate_id`, `_validate_dna`); raises `ValueError` on invalid input.
+- DNA sequence is automatically normalized to uppercase.
 
 ### `app/services/lab_service.py`
-- **`LabService`**: hält Samples in einem Dict (`sample_id → Sample`).
-- Methoden: `add_sample`, `list_samples`, `delete_sample`, `find_sample`, `get_state`, `set_state`.
-- Verhindert doppelte IDs bei `add_sample`.
+- **`LabService`**: holds samples in a dict (`sample_id → Sample`).
+- Methods: `add_sample`, `list_samples`, `update_sample`, `delete_sample`, `find_sample`, `get_state`, `set_state`.
+- `update_sample(sample_id, sample_dna)`: replaces the DNA of an existing sample (ID stays fixed as the primary key); validates the new DNA via the `Sample` constructor.
+- Prevents duplicate IDs in `add_sample`.
 
 ### `app/io/storage_json.py`
-- `save_samples(path, samples_dict)`: schreibt Samples als JSON-Liste, legt Zielverzeichnis bei Bedarf an.
-- `load_samples(path)`: liest JSON, baut `Sample`-Objekte, erkennt doppelte IDs in der Datei.
-- Gibt leeres Dict zurück, falls Datei nicht existiert.
+- `save_samples(path, samples_dict)`: writes samples as a JSON list, creates the target directory if needed.
+- `load_samples(path)`: reads JSON, builds `Sample` objects, detects duplicate IDs in the file.
+- Returns an empty dict if the file doesn't exist.
 
 ### `app/scripts/cli.py`
-- Click-Group `cli` mit Kommandos: `add`, `list`, `delete`, `search`.
-- `get_service()` lädt bei jedem Aufruf den Zustand aus `data/lab_state.json`, erzeugt einen `LabService` und gibt ihn zurück (kein Caching zwischen Kommandos – Prozess startet pro CLI-Aufruf neu).
-- Nach `add`/`delete` wird der Zustand sofort wieder gespeichert.
-- Fehlerausgabe farbig via `click.style` (grün = Erfolg, rot = Fehler).
+- Click group `cli` with commands: `add`, `list`, `update`, `delete`, `search`.
+- `get_service()` loads the state from `data/lab_state.json` on every call, creates a `LabService`, and returns it (no caching between commands – a new process starts on every CLI invocation).
+- After `add`/`update`/`delete`, the state is immediately saved again.
+- Error output is colored via `click.style` (green = success, red = error).
 
 ### `app/scripts/demo.py`
-- Eigenständiges Skript zum manuellen Durchspielen des Workflows (laden → Sample hinzufügen → anzeigen → speichern), unabhängig von der CLI.
+- Standalone script for manually walking through the workflow (load → add sample → display → save), independent of the CLI.
 
 ### `app/main.py`
-- Einziger Zweck: importiert und startet `cli()` aus `app/scripts/cli.py`.
+- Sole purpose: imports and starts `cli()` from `app/scripts/cli.py`.
 
-## Konfiguration & Tooling
+### `tests/`
+- Flat structure, a single `__init__.py` at the root (ensures pytest adds the project root to `sys.path` so `app` is importable).
+- `test_models.py`: validation rules for `Sample` (ID format, DNA character set, normalization).
+- `test_lab_service.py`: `LabService` behavior incl. `update_sample`, duplicate handling.
+- `test_storage_json.py`: save/load roundtrip via `tmp_path`, missing file, duplicate IDs on load.
+- Run with `uv run pytest -v`.
 
-- **`pyproject.toml`**: Python ≥3.13, Paketmanagement über `uv` (siehe `uv.lock`). Dependencies: `click`, `pandas`, `pydantic` (Pydantic aktuell noch ungenutzt – vermutlich für geplante Validierungs-Migration, siehe Roadmap in README).
-- **Packaging**: `setuptools`, findet Pakete unter `app*`.
-- **`.gitignore`**: schließt `.venv`, Caches, Build-Artefakte, `.env`-Dateien und `data/lab_state.json` (lokaler Zustand) aus.
+## Configuration & Tooling
 
-## Persistenz
+- **`pyproject.toml`**: Python ≥3.13, package management via `uv` (see `uv.lock`). Dependencies: `click`, `pandas`, `pydantic` (Pydantic currently unused – likely intended for a planned validation migration, see roadmap in README).
+- **Packaging**: `setuptools`, finds packages under `app*`.
+- **`.gitignore`**: excludes `.venv`, caches, build artifacts, `.env` files, and `data/lab_state.json` (local state).
 
-- Zustand wird als flache JSON-Liste unter `data/lab_state.json` gespeichert.
-- Datei ist git-ignored → lokaler State, kein Teil des Repos.
+## Persistence
 
-## Offene Punkte / Roadmap (aus README)
+- State is stored as a flat JSON list under `data/lab_state.json`.
+- File is git-ignored → local state, not part of the repo.
 
-- [ ] Unit Tests (pytest)
-- [ ] Sample-Update-Funktion
-- [ ] Pydantic-basierte Validierung (Dependency ist schon vorhanden, aber noch nicht genutzt)
+## Open Items / Roadmap (from README)
+
+- [x] Unit tests (pytest)
+- [x] Sample update function
+- [ ] Pydantic-based validation (dependency already present, but not yet used)
 - [ ] Export (CSV, Excel)
-- [ ] DNA-Analyse-Tools: Transkription, Translation, Fragment-Suche
+- [ ] DNA analysis tools: transcription, translation, fragment search
 
-## Anmerkungen für Weiterentwicklung
+## Notes for Further Development
 
-- `LabService` und `storage_json` sind sauber getrennt, aber die CLI übernimmt aktuell die Orchestrierung (Laden/Speichern bei jedem Kommando) – bei wachsender Komplexität könnte ein Repository-Pattern oder ein Kontextmanager sinnvoll werden.
-- Da pro CLI-Aufruf ein neuer Prozess startet, gibt es keinen In-Memory-Zustand zwischen Kommandos – jede Operation liest/schreibt vollständig die JSON-Datei. Bei größeren Datenmengen könnte das relevant werden (Stichwort: spätere Migration auf SQLite, wie im Schwesterprojekt `library-tracker` geplant).
+- `LabService` and `storage_json` are cleanly separated, but the CLI currently handles orchestration (load/save on every command) – as complexity grows, a repository pattern or context manager might make sense.
+- Since each CLI invocation starts a new process, there's no in-memory state between commands – every operation fully reads/writes the JSON file. This could become relevant with larger datasets (keyword: later migration to SQLite, as planned in the sister project `library-tracker`).

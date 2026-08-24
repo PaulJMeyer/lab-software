@@ -1,28 +1,32 @@
-import re
+from pydantic import BaseModel, field_validator
 
 VALID_DNA_CHARS = set("ACGTNRYKMSWBDHV-")
 
-class Sample:
-    def __init__(self, sample_id: str, sample_dna: str):
-        self._validate_id(sample_id)
-        self.sample_id = sample_id
-        self.sample_dna = self._validate_dna(sample_dna)
 
-    def _validate_id(self, sample_id: str):
-        if not sample_id:
-            raise ValueError("Sample-ID darf nicht leer sein.")
-        if len(sample_id) != 9:
-            raise ValueError(f"Sample-ID muss genau 9 Zeichen lang sein, war: {len(sample_id)}")
-        if not re.fullmatch(r"[1-9]{9}", sample_id):
-            raise ValueError("Sample-ID darf nur Ziffern von 1-9 enthalten (keine 0).")
+class Sample(BaseModel):
+    sample_id: str
+    sample_dna: str
 
-    def _validate_dna(self, sample_dna: str) -> str:
-        if not sample_dna:
-            raise ValueError("DNA-Sequenz darf nicht leer sein.")
-        normalized = sample_dna.upper()
+    @field_validator("sample_id")
+    @classmethod
+    def validate_sample_id(cls, value: str) -> str:
+        if not value:
+            raise ValueError("Sample ID must not be empty.")
+        if len(value) != 9:
+            raise ValueError(f"Sample ID must be exactly 9 characters long, was: {len(value)}")
+        if not value.isdigit() or "0" in value:
+            raise ValueError("Sample ID must only contain digits 1-9 (no 0).")
+        return value
+
+    @field_validator("sample_dna")
+    @classmethod
+    def validate_sample_dna(cls, value: str) -> str:
+        if not value:
+            raise ValueError("DNA sequence must not be empty.")
+        normalized = value.upper()
         invalid = set(normalized) - VALID_DNA_CHARS
         if invalid:
-            raise ValueError(f"Ungültige Zeichen in DNA-Sequenz: {', '.join(sorted(invalid))}")
+            raise ValueError(f"Invalid characters in DNA sequence: {', '.join(sorted(invalid))}")
         return normalized
 
     def __repr__(self):
