@@ -2,6 +2,12 @@ from pydantic import BaseModel, field_validator
 
 VALID_DNA_CHARS = set("ACGTNRYKMSWBDHV-")
 
+IUPAC_COMPLEMENT = {
+    "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
+    "R": "Y", "Y": "R", "K": "M", "M": "K", "S": "S", "W": "W",
+    "B": "V", "V": "B", "D": "H", "H": "D", "-": "-",
+}
+
 
 class Sample(BaseModel):
     sample_id: str

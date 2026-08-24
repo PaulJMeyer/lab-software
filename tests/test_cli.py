@@ -88,6 +88,21 @@ class TestSearchCommand:
             assert "No sample found" in result.output
 
 
+class TestAnalyzeCommand:
+
+    def test_analyze_existing_sample_shows_results(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["analyze", "--id", "123456789"])
+            assert "Reverse complement: ACGT" in result.output
+            assert "RNA transcript:     ACGU" in result.output
+
+    def test_analyze_unknown_id_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["analyze", "--id", "999999999"])
+            assert "No sample found" in result.output
+
+
 class TestPersistenceAcrossInvocations:
 
     def test_data_persists_between_cli_calls(self, runner):

@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from app.domain.models import Sample
 from app.services.lab_service import LabService
 from app.io.storage_json import save_samples, load_samples
+from app.analysis.dna_tools import reverse_complement, transcribe
 
 DATA_PATH = Path("data/lab_state.json")
 
@@ -84,6 +85,20 @@ def search(sample_id):
         click.echo(f"\nID:       {sample.sample_id}")
         click.echo(f"DNA:      {sample.sample_dna}")
         click.echo(f"Length:   {len(sample.sample_dna)} bases")
+
+@cli.command()
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to analyze")
+def analyze(sample_id):
+    """Show the reverse complement and RNA transcript of a sample"""
+    service = get_service()
+    sample = service.find_sample(sample_id)
+    if sample is None:
+        click.echo(click.style(f"✗ No sample found with ID '{sample_id}'.", fg="red"))
+        return
+    click.echo(f"\nID:                 {sample.sample_id}")
+    click.echo(f"DNA:                {sample.sample_dna}")
+    click.echo(f"Reverse complement: {reverse_complement(sample.sample_dna)}")
+    click.echo(f"RNA transcript:     {transcribe(sample.sample_dna)}")
 
 if __name__ == "__main__":  # pragma: no cover
     cli()

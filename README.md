@@ -1,15 +1,17 @@
 # Lab Software
 
-A lightweight command-line application for managing biological lab samples. Supports registering, listing, searching, and deleting samples with persistent JSON storage.
+A lightweight command-line application for managing biological lab samples. Supports registering, listing, updating, searching, deleting, and analyzing samples with persistent JSON storage.
 
 ---
 
 ## Features
 
-- Register new samples with ID and DNA sequence validation
+- Register new samples with ID and DNA sequence validation (via Pydantic)
 - List all registered samples with a formatted overview
+- Update the DNA sequence of an existing sample
 - Search for a specific sample by ID
 - Delete samples by ID
+- Analyze a sample: reverse complement and RNA transcript
 - Persistent storage via JSON file
 - Duplicate ID prevention
 
@@ -27,14 +29,17 @@ python main.py add
 # List all samples
 python main.py list
 
+# Update a sample's DNA sequence
+python main.py update --id "123456789" --dna "ACGTNNRRY"
+
 # Search sample
 python main.py search --id "123456789"
 
 # Delete sample
 python main.py delete --id "123456789"
 
-# Update sample
-python main.py update --id "123456789" --dna "ACGTNNRRY"
+# Analyze sample (reverse complement + RNA transcript)
+python main.py analyze --id "123456789"
 ```
 
 ---
@@ -52,16 +57,36 @@ python main.py update --id "123456789" --dna "ACGTNNRRY"
 
 ---
 
+## Testing
+
+Tests are written with `pytest` and cover validation, business logic, persistence, DNA analysis, and all CLI commands.
+
+```bash
+# Run tests
+uv run pytest -v
+
+# Run tests with coverage
+uv run pytest --cov=app --cov-report=term-missing -v
+```
+
+Tests run automatically on every push and pull request via GitHub Actions; the coverage summary is shown in the workflow run's job summary.
+
+---
+
 ## Roadmap
 
 - [x] Unit tests (pytest)
 - [x] Sample update
-- [ ] Pydantic-based validation
-- [ ] Export (CSV, Excel)
-- [ ] DNA analysis tools:
-  - [ ] Transcription
+- [x] Pydantic-based validation
+- [x] Test coverage tracked in CI
+- [x] DNA analysis tools:
+  - [x] Reverse complement
+  - [x] Transcription
   - [ ] Translation
   - [ ] Search for DNA fragments
+- [ ] FASTA import: drop FASTA files into a designated directory to have them registered and analyzed
+- [ ] Perspective: direct download from bioinformatics databases (e.g. NCBI, ENA)
+- [ ] Export (CSV, Excel)
 
 ---
 
@@ -72,3 +97,5 @@ python main.py update --id "123456789" --dna "ACGTNNRRY"
 | click    | ≥ 8.3.1  |
 | pandas   | ≥ 3.0.1  |
 | pydantic | ≥ 2.12.5 |
+
+Dev dependencies (testing): `pytest`, `pytest-cov`.
