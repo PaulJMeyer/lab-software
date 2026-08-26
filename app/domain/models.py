@@ -9,6 +9,28 @@ IUPAC_COMPLEMENT = {
 }
 
 
+def validate_sample_id_format(value: str) -> str:
+    """Validate a sample ID and return it. Raises ValueError if invalid."""
+    if not value:
+        raise ValueError("Sample ID must not be empty.")
+    if len(value) != 9:
+        raise ValueError(f"Sample ID must be exactly 9 characters long, was: {len(value)}")
+    if not value.isdigit() or "0" in value:
+        raise ValueError("Sample ID must only contain digits 1-9 (no 0).")
+    return value
+
+
+def validate_sample_dna_format(value: str) -> str:
+    """Validate a DNA sequence and return it normalized to uppercase. Raises ValueError if invalid."""
+    if not value:
+        raise ValueError("DNA sequence must not be empty.")
+    normalized = value.upper()
+    invalid = set(normalized) - VALID_DNA_CHARS
+    if invalid:
+        raise ValueError(f"Invalid characters in DNA sequence: {', '.join(sorted(invalid))}")
+    return normalized
+
+
 class Sample(BaseModel):
     sample_id: str
     sample_dna: str
@@ -16,24 +38,12 @@ class Sample(BaseModel):
     @field_validator("sample_id")
     @classmethod
     def validate_sample_id(cls, value: str) -> str:
-        if not value:
-            raise ValueError("Sample ID must not be empty.")
-        if len(value) != 9:
-            raise ValueError(f"Sample ID must be exactly 9 characters long, was: {len(value)}")
-        if not value.isdigit() or "0" in value:
-            raise ValueError("Sample ID must only contain digits 1-9 (no 0).")
-        return value
+        return validate_sample_id_format(value)
 
     @field_validator("sample_dna")
     @classmethod
     def validate_sample_dna(cls, value: str) -> str:
-        if not value:
-            raise ValueError("DNA sequence must not be empty.")
-        normalized = value.upper()
-        invalid = set(normalized) - VALID_DNA_CHARS
-        if invalid:
-            raise ValueError(f"Invalid characters in DNA sequence: {', '.join(sorted(invalid))}")
-        return normalized
+        return validate_sample_dna_format(value)
 
     def __repr__(self):
         return str((self.sample_id, len(self.sample_dna)))

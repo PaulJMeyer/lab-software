@@ -19,28 +19,26 @@ A lightweight command-line application for managing biological lab samples. Supp
 
 ## Usage
 
-```bash
 # Add sample
-python main.py add --id "123456789" --dna "ACGTNNRRY"
+python -m app.main add --id "123456789" --dna "ACGTNNRRY"
 
 # Add sample (interactive)
-python main.py add
+python -m app.main add
 
 # List all samples
-python main.py list
+python -m app.main list
 
 # Update a sample's DNA sequence
-python main.py update --id "123456789" --dna "ACGTNNRRY"
+python -m app.main update --id "123456789" --dna "ACGTNNRRY"
 
 # Search sample
-python main.py search --id "123456789"
+python -m app.main search --id "123456789"
 
 # Delete sample
-python main.py delete --id "123456789"
+python -m app.main delete --id "123456789"
 
 # Analyze sample (reverse complement + RNA transcript)
-python main.py analyze --id "123456789"
-```
+python -m app.main analyze --id "123456789"
 
 ---
 

@@ -17,10 +17,16 @@ class TestAddCommand:
             assert result.exit_code == 0
             assert "added successfully" in result.output
 
-    def test_add_invalid_dna_shows_error(self, runner):
+    def test_add_invalid_dna_via_flag_shows_error(self, runner):
         with runner.isolated_filesystem():
             result = runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGTX"])
-            assert result.exit_code == 0
+            assert result.exit_code == 2
+            assert "Error" in result.output
+
+    def test_add_invalid_id_via_flag_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add", "--id", "12345", "--dna", "ACGT"])
+            assert result.exit_code == 2
             assert "Error" in result.output
 
     def test_add_duplicate_id_shows_error(self, runner):
@@ -28,6 +34,21 @@ class TestAddCommand:
             runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
             result = runner.invoke(cli, ["add", "--id", "123456789", "--dna", "TTTT"])
             assert "Error" in result.output
+
+    def test_add_reprompts_for_invalid_id_before_asking_dna(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add"], input="12345\n123456789\nACGT\n")
+            assert result.exit_code == 0
+            assert "added successfully" in result.output
+            output_before_dna_prompt = result.output.split("DNA sequence:")[0]
+            assert "Sample ID must be exactly 9 characters long" in output_before_dna_prompt
+
+    def test_add_reprompts_for_invalid_dna(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add"], input="123456789\nXYZ\nACGT\n")
+            assert result.exit_code == 0
+            assert "added successfully" in result.output
+            assert "Invalid characters in DNA sequence" in result.output
 
 
 class TestListCommand:
@@ -57,6 +78,14 @@ class TestUpdateCommand:
         with runner.isolated_filesystem():
             result = runner.invoke(cli, ["update", "--id", "999999999", "--dna", "TTTT"])
             assert "Error" in result.output
+
+    def test_update_reprompts_for_invalid_dna(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["update"], input="123456789\nXYZ\nTTTT\n")
+            assert result.exit_code == 0
+            assert "updated successfully" in result.output
+            assert "Invalid characters in DNA sequence" in result.output
 
 
 class TestDeleteCommand:

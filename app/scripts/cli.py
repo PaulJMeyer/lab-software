@@ -1,7 +1,7 @@
 import click
 from pathlib import Path
 from pydantic import ValidationError
-from app.domain.models import Sample
+from app.domain.models import Sample, validate_sample_id_format, validate_sample_dna_format
 from app.services.lab_service import LabService
 from app.io.storage_json import save_samples, load_samples
 from app.analysis.dna_tools import reverse_complement, transcribe
@@ -14,14 +14,28 @@ def get_service():
     service.set_state(loaded)
     return service
 
+def validate_id_option(ctx, param, value):
+    """Click callback: validates the sample ID as it's entered, reprompting on invalid input."""
+    try:
+        return validate_sample_id_format(value)
+    except ValueError as e:
+        raise click.BadParameter(str(e))
+
+def validate_dna_option(ctx, param, value):
+    """Click callback: validates the DNA sequence as it's entered, reprompting on invalid input."""
+    try:
+        return validate_sample_dna_format(value)
+    except ValueError as e:
+        raise click.BadParameter(str(e))
+
 @click.group()
 def cli():
     """Lab Software CLI"""
     pass
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Unique sample ID")
-@click.option("--dna", "sample_dna", required=True, prompt="DNA sequence", help="DNA sequence of the sample")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", callback=validate_id_option, help="Unique sample ID")
+@click.option("--dna", "sample_dna", required=True, prompt="DNA sequence", callback=validate_dna_option, help="DNA sequence of the sample")
 def add(sample_id, sample_dna):
     """Register a new sample"""
     service = get_service()
@@ -49,8 +63,8 @@ def list_samples():
     click.echo(f"\n{len(samples)} sample(s) total.")
 
 @cli.command()
-@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to update")
-@click.option("--dna", "sample_dna", required=True, prompt="New DNA sequence", help="New DNA sequence of the sample")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", callback=validate_id_option, help="Sample ID to update")
+@click.option("--dna", "sample_dna", required=True, prompt="New DNA sequence", callback=validate_dna_option, help="New DNA sequence of the sample")
 def update(sample_id, sample_dna):
     """Update the DNA sequence of an existing sample"""
     service = get_service()
