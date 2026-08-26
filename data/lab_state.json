@@ -1,18 +1,37 @@
 [
   {
     "sample_id": "987654321",
-    "sample_dna": "ACGCTGATGCTAGCCTATCGATCGGATATCGCGAT"
+    "sample_dna": "ACGCTGATGCTAGCCTATCGATCGGATATCGCGAT",
+    "reverse_complement": null,
+    "rna_transcript": null,
+    "protein": null
   },
   {
     "sample_id": "897654312",
-    "sample_dna": "AGCTAGTGTACACAGTACACAGTACAGTAG"
+    "sample_dna": "AGCTAGTGTACACAGTACACAGTACAGTAG",
+    "reverse_complement": null,
+    "rna_transcript": null,
+    "protein": null
   },
   {
     "sample_id": "123456789",
-    "sample_dna": "ACGTN-RY"
+    "sample_dna": "ACGTN-RY",
+    "reverse_complement": "RY-NACGT",
+    "rna_transcript": "ACGUN-RY",
+    "protein": null
   },
   {
     "sample_id": "472184972",
-    "sample_dna": "GCAWHGTACSHCGTAGCTAWGA-HACGTBACGTAGCAGTGC"
+    "sample_dna": "GCAWHGTACSHCGTAGCTAWGA-HACGTBACGTAGCAGTGC",
+    "reverse_complement": null,
+    "rna_transcript": null,
+    "protein": null
+  },
+  {
+    "sample_id": "324547238",
+    "sample_dna": "ACGTHAGWVCAGTGBAGTCGATCGATCRGATCGTAWAGCAGTACAGT",
+    "reverse_complement": null,
+    "rna_transcript": null,
+    "protein": null
   }
 ]

@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel, field_validator
 
 VALID_DNA_CHARS = set("ACGTNRYKMSWBDHV-")
@@ -34,6 +35,9 @@ def validate_sample_dna_format(value: str) -> str:
 class Sample(BaseModel):
     sample_id: str
     sample_dna: str
+    reverse_complement: Optional[str] = None
+    rna_transcript: Optional[str] = None
+    protein: Optional[str] = None
 
     @field_validator("sample_id")
     @classmethod

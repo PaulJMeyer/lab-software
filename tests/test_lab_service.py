@@ -69,6 +69,19 @@ class TestUpdateSample:
         with pytest.raises(ValidationError):
             service.update_sample("111111111", "XYZ")
 
+    def test_update_clears_derived_analysis_fields(self, service, sample_a):
+        sample_a.reverse_complement = "ACGT"
+        sample_a.rna_transcript = "ACGU"
+        sample_a.protein = "M"
+        service.add_sample(sample_a)
+
+        service.update_sample("111111111", "TTTT")
+        updated = service.find_sample("111111111")
+
+        assert updated.reverse_complement is None
+        assert updated.rna_transcript is None
+        assert updated.protein is None
+
 
 class TestDeleteSample:
 

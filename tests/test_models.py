@@ -59,3 +59,24 @@ class TestSampleRepr:
     def test_repr_contains_id_and_dna_length(self):
         sample = Sample(sample_id="123456789", sample_dna="ACGT")
         assert repr(sample) == str(("123456789", 4))
+
+
+class TestSampleDerivedFields:
+
+    def test_derived_fields_default_to_none(self):
+        sample = Sample(sample_id="123456789", sample_dna="ACGT")
+        assert sample.reverse_complement is None
+        assert sample.rna_transcript is None
+        assert sample.protein is None
+
+    def test_derived_fields_can_be_set(self):
+        sample = Sample(
+            sample_id="123456789",
+            sample_dna="ACGT",
+            reverse_complement="ACGT",
+            rna_transcript="ACGU",
+            protein="M",
+        )
+        assert sample.reverse_complement == "ACGT"
+        assert sample.rna_transcript == "ACGU"
+        assert sample.protein == "M"
