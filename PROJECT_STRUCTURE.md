@@ -12,7 +12,8 @@ lab-software/
 │   ├── domain/
 │   │   └── models.py         # Data models (Sample) incl. validation
 │   ├── io/
-│   │   └── storage_json.py   # Persistence: load/save as JSON
+│   │   ├── storage_json.py   # Persistence: load/save as JSON
+│   │   └── fasta_import.py   # FASTA parsing and sample ID generation for import
 │   ├── scripts/
 │   │   ├── cli.py            # Click-based CLI commands
 │   │   └── demo.py           # Manual demo/test script
@@ -25,13 +26,16 @@ lab-software/
 │   ├── test_lab_service.py   # Tests for LabService
 │   ├── test_storage_json.py  # Tests for JSON persistence
 │   ├── test_dna_tools.py     # Tests for DNA analysis functions
+│   ├── test_fasta_import.py  # Tests for FASTA parsing and ID generation
 │   ├── test_cli.py           # Tests for CLI commands (Click CliRunner)
 │   └── test_main.py          # Smoke test for the entry point
 ├── .github/
 │   └── workflows/
 │       └── tests.yml         # CI: runs pytest with coverage on every push/PR
 ├── data/
-│   └── lab_state.json        # persisted state (gitignored)
+│   ├── lab_state.json        # persisted state (gitignored)
+│   └── fasta_import/         # drop zone for FASTA files (gitignored)
+│       └── processed/        # files moved here after import
 ├── pyproject.toml
 ├── uv.lock
 ├── README.md
@@ -80,12 +84,18 @@ Dependency direction: `scripts → services → domain`, `scripts → io → dom
 - Returns an empty dict if the file doesn't exist.
 - Using `model_dump`/`model_validate` (rather than manual field-by-field mapping) means derived analysis fields are persisted and restored automatically without touching this module when `Sample`'s fields change.
 
+### `app/io/fasta_import.py`
+- `parse_fasta(text)`: parses FASTA-formatted text into a list of `(header, sequence)` tuples. Supports multi-FASTA files (several `>header` records per file); multi-line sequences under one header are concatenated; blank lines are ignored; returns an empty list if no `>` header is found.
+- `generate_sample_id(existing_ids)`: generates a random 9-digit sample ID (digits 1-9 only, matching `Sample`'s ID format), retrying until it doesn't collide with `existing_ids`.
+- No validation of sequence content here — invalid DNA is caught later by `Sample`'s own validation when the CLI constructs the sample.
+
 ### `app/scripts/cli.py`
-- Click group `cli` with commands: `add`, `list`, `update`, `delete`, `search`, `analyze`.
+- Click group `cli` with commands: `add`, `list`, `update`, `delete`, `search`, `analyze`, `import-fasta`.
 - **Per-field validation callbacks** (`validate_id_option`, `validate_dna_option`): attached to the `--id`/`--dna` options of `add` and `update`. They call `validate_sample_id_format`/`validate_sample_dna_format` from `models.py` and raise `click.BadParameter` on failure. Combined with `prompt=True`, this makes Click reprompt for that specific field immediately — e.g. an invalid ID is caught and re-asked before the DNA sequence is even requested, rather than only surfacing after both fields have been entered. When a value is passed non-interactively via the flag (not the prompt) and fails validation, Click reports a standard usage error and exits with code 2, instead of falling through to the command's own try/except.
 - **`ANALYSES`**: a registry list of `(field_name, label, function)` tuples — `reverse_complement`, `rna_transcript` (via `transcribe`), and `protein` (via `translate`) — driving the `analyze` menu.
 - `analyze --id <id>`: interactive loop. Computes which analyses haven't been performed yet (`getattr(sample, field_name) is None`), shows them as a numbered menu (`click.IntRange` reprompts on out-of-range/non-numeric input), runs the chosen one, stores the result on the `Sample` instance, saves state immediately, then asks "Do you want to perform further analysis?" (`click.confirm`). Repeats until the user declines or no analyses remain; reports completion once nothing is left. A translation attempt without a start codon shows the error but doesn't store a result, so it remains offered on the next run.
 - `search --id <id>`: shows sample details plus any derived fields that are not `None` (reverse complement, RNA transcript, protein). `list` intentionally does **not** show these — it stays a compact overview.
+- `import-fasta`: scans `data/fasta_import/` for `.fasta`/`.fa` files, parses each with `parse_fasta`, and registers one `Sample` per record with a randomly generated ID (via `generate_sample_id`). Invalid records (e.g. bad DNA characters) are skipped with an error message; the rest of the file and any other files still get processed. A file with no parsable FASTA records is reported and left in place (not moved). Successfully processed files are moved into `data/fasta_import/processed/`, prefixed with a timestamp to avoid name collisions on repeated imports. Prints a final summary of imported/failed record counts. Does not automatically run any analyses — those remain a separate step via `analyze`.
 - `get_service()` loads the state from `data/lab_state.json` on every call, creates a `LabService`, and returns it (no caching between commands – a new process starts on every CLI invocation).
 - After `add`/`update`/`delete`/a successful `analyze` step, the state is immediately saved again.
 - Catches `(ValidationError, ValueError)` around commands that can fail; error output is colored via `click.style` (green = success, red = error).
@@ -103,10 +113,11 @@ Dependency direction: `scripts → services → domain`, `scripts → io → dom
 - `test_lab_service.py`: `LabService` behavior incl. `update_sample`, duplicate handling, and the reset of derived analysis fields on update.
 - `test_storage_json.py`: save/load roundtrip via `tmp_path`, missing file, duplicate IDs on load, roundtrip of derived analysis fields (set and unset).
 - `test_dna_tools.py`: reverse complement and transcription incl. ambiguity codes and gap characters; translation incl. stop-codon handling, start codons not at position 0, missing start codon, and incomplete trailing codons.
-- `test_cli.py`: all CLI commands via Click's `CliRunner` + `isolated_filesystem()`, success and error paths, including the interactive `analyze` menu (selection, reprompt on invalid input, shrinking menu, completion message, translation-without-gene error) and `search`'s conditional display of derived fields.
+- `test_fasta_import.py`: FASTA parsing (single/multi-record, multi-line sequences, blank lines, missing header), and sample ID generation incl. the collision-retry path (via `monkeypatch` on `random.choice`).
+- `test_cli.py`: all CLI commands via Click's `CliRunner` + `isolated_filesystem()`, success and error paths, including the interactive `analyze` menu (selection, reprompt on invalid input, shrinking menu, completion message, translation-without-gene error), `search`'s conditional display of derived fields, and `import-fasta` (single/multi-record files, partial failures, non-FASTA files ignored, malformed files left in place, successful files moved to `processed/`).
 - `test_main.py`: smoke test confirming the entry point imports and exposes `cli`.
 - Run with `uv run pytest -v`, or with coverage: `uv run pytest --cov=app --cov-report=term-missing -v`.
-- Currently at 100% coverage (excluding `demo.py`), 77 tests.
+- Currently at 100% coverage (excluding `demo.py`), 96 tests.
 
 ### `.github/workflows/tests.yml`
 - Runs on every push and pull request.
@@ -119,12 +130,13 @@ Dependency direction: `scripts → services → domain`, `scripts → io → dom
 - **`pyproject.toml`**: Python ≥3.13, package management via `uv` (see `uv.lock`). Runtime dependencies: `click`, `pandas`, `pydantic`. Dev dependency group (`[dependency-groups] dev`): `pytest`, `pytest-cov`.
 - **`[tool.coverage.run]`** in `pyproject.toml`: excludes `app/scripts/demo.py` from coverage measurement.
 - **Packaging**: `setuptools`, finds packages under `app*`.
-- **`.gitignore`**: excludes `.venv`, caches, build artifacts, `.env` files, and `data/lab_state.json` (local state).
+- **`.gitignore`**: excludes `.venv`, caches, coverage artifacts, build artifacts, `.env` files, `data/lab_state.json` (local state), and `data/fasta_import/` (local drop zone and processed files).
 
 ## Persistence
 
 - State is stored as a flat JSON list under `data/lab_state.json`.
 - File is git-ignored → local state, not part of the repo.
+- FASTA files dropped into `data/fasta_import/` are local input data; both the drop zone and its `processed/` subfolder are git-ignored.
 
 ## Open Items / Roadmap
 
@@ -134,8 +146,8 @@ Dependency direction: `scripts → services → domain`, `scripts → io → dom
 - [x] Test coverage tracked in CI (GitHub Actions job summary)
 - [x] DNA analysis tools: reverse complement, transcription, translation (start/stop codon detection)
 - [x] Analysis results stored on the sample and persisted (shown in `search`, not in `list`)
+- [x] FASTA import: drop FASTA files into `data/fasta_import/` to have them registered as samples (processed files moved to `data/fasta_import/processed/`)
 - [ ] DNA analysis tools: fragment search
-- [ ] FASTA import: drop FASTA files into a designated directory to have them registered as samples and analyzed
 - [ ] Perspective: direct download from bioinformatics databases (e.g. NCBI, ENA)
 - [ ] Export (CSV, Excel)
 
@@ -145,3 +157,5 @@ Dependency direction: `scripts → services → domain`, `scripts → io → dom
 - Since each CLI invocation starts a new process, there's no in-memory state between commands – every operation fully reads/writes the JSON file. This could become relevant with larger datasets (keyword: later migration to SQLite, as planned in the sister project `library-tracker`).
 - `app/analysis/` is intentionally separate from `app/services/` — it holds pure, stateless sequence-analysis functions with no dependency on the in-memory sample store, so it can be reused (e.g. for FASTA-file analysis) without going through `LabService`.
 - Derived analysis fields on `Sample` are mutated in place by the CLI (`setattr` on the object returned by `find_sample`, which is the same instance held in `LabService`'s internal dict) rather than via `LabService`. If analysis logic needs to move behind a service method later (e.g. once FASTA import reuses it), consider adding something like `LabService.record_analysis_result(sample_id, field_name, value)` to keep all sample mutation behind the service boundary.
+- FASTA-imported samples get a randomly generated ID rather than one derived from the FASTA header, since headers are free-form text and don't match the required 9-digit format. The original header text is only shown in the import output, not stored on the `Sample` — if traceability back to the source header becomes important, `Sample` would need an additional field for it.
+- `import-fasta` does not automatically run any analyses on imported samples; that's a deliberate, separate step via `analyze`, though this may change later (see roadmap).

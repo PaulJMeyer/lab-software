@@ -13,6 +13,7 @@ A lightweight command-line application for managing biological lab samples. Supp
 - Delete samples by ID
 - Analyze a sample interactively: reverse complement, RNA transcription, and protein translation
 - Analysis results are stored on the sample and persisted to JSON
+- Import samples from FASTA files (single or multi-record) dropped into a designated directory
 - Persistent storage via JSON file
 - Duplicate ID prevention
 
@@ -41,6 +42,9 @@ python -m app.main delete --id "123456789"
 
 # Analyze sample interactively
 python -m app.main analyze --id "123456789"
+
+# Import samples from FASTA files
+python -m app.main import-fasta
 ```
 
 ### Interactive analysis
@@ -60,6 +64,25 @@ Do you want to perform further analysis? [y/N]:
 Each result is saved immediately and shown afterwards in `search`. Once all analyses have been performed, `analyze` reports that nothing is left to do. Updating a sample's DNA sequence clears all previously stored results, since they no longer apply to the new sequence.
 
 Translation looks for the first start codon (`ATG`) and translates codon by codon until a stop codon or the end of the sequence. If no start codon is found, it reports that the DNA does not contain a gene rather than storing a result.
+
+### FASTA import
+
+Drop one or more `.fasta`/`.fa` files into `data/fasta_import/` (created automatically on first run), then:
+
+```bash
+python -m app.main import-fasta
+```
+
+Each `>header` record in each file becomes a new sample with a randomly generated, unique 9-digit ID (FASTA headers are free-form text and don't match the sample ID format, so they aren't used as the ID directly). Files can contain multiple records (multi-FASTA); multi-line sequences under one header are concatenated automatically.
+
+```
+✓ Imported 'gene_1 description text' as sample '384719562'.
+✓ Imported 'gene_2' as sample '927154836'.
+
+Import complete: 2 sample(s) imported, 0 failed.
+```
+
+Records with invalid DNA characters are skipped and reported, without stopping the rest of the import. Successfully processed files are moved into `data/fasta_import/processed/` (timestamped) so they aren't imported again; a file with no valid FASTA records is left in place and reported. Analyses are **not** run automatically on imported samples — use `analyze` afterwards.
 
 ---
 
@@ -103,7 +126,7 @@ Tests run automatically on every push and pull request via GitHub Actions; the c
   - [x] Transcription
   - [x] Translation (with start/stop codon detection)
   - [ ] Search for DNA fragments
-- [ ] FASTA import: drop FASTA files into a designated directory to have them registered and analyzed
+- [x] FASTA import: drop FASTA files into a designated directory to have them registered
 - [ ] Perspective: direct download from bioinformatics databases (e.g. NCBI, ENA)
 - [ ] Export (CSV, Excel)
 

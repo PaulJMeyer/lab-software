@@ -194,6 +194,87 @@ class TestAnalyzeCommand:
             assert "Reverse complement: AAAA" in result.output
 
 
+class TestImportFastaCommand:
+
+    def test_no_import_directory_shows_message(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["import-fasta"])
+            assert "No FASTA files found" in result.output
+
+    def test_imports_single_record(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/sample.fasta").write_text(">My Sample\nACGT\n")
+
+            result = runner.invoke(cli, ["import-fasta"])
+
+            assert "Imported 'My Sample'" in result.output
+            assert "1 sample(s) imported, 0 failed" in result.output
+
+            list_result = runner.invoke(cli, ["list"])
+            assert "1 sample(s) total" in list_result.output
+
+    def test_imports_multiple_records_from_one_file(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/multi.fasta").write_text(
+                ">First\nACGT\n>Second\nTTTT\n"
+            )
+
+            result = runner.invoke(cli, ["import-fasta"])
+
+            assert "2 sample(s) imported, 0 failed" in result.output
+
+    def test_invalid_record_is_skipped_but_others_still_imported(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/mixed.fasta").write_text(
+                ">Good\nACGT\n>Bad\nACGTX\n"
+            )
+
+            result = runner.invoke(cli, ["import-fasta"])
+
+            assert "1 sample(s) imported, 1 failed" in result.output
+            assert "Failed to import 'Bad'" in result.output
+
+    def test_file_without_fasta_records_is_reported_and_not_moved(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/broken.fasta").write_text("no header here\n")
+
+            result = runner.invoke(cli, ["import-fasta"])
+
+            assert "no FASTA records found" in result.output
+            assert Path("data/fasta_import/broken.fasta").exists()
+
+    def test_processed_file_is_moved_out_of_import_directory(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/sample.fasta").write_text(">One\nACGT\n")
+
+            runner.invoke(cli, ["import-fasta"])
+
+            assert not Path("data/fasta_import/sample.fasta").exists()
+            processed_files = list(Path("data/fasta_import/processed").glob("*sample.fasta"))
+            assert len(processed_files) == 1
+
+    def test_non_fasta_files_are_ignored(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            Path("data/fasta_import").mkdir(parents=True)
+            Path("data/fasta_import/notes.txt").write_text("irrelevant")
+
+            result = runner.invoke(cli, ["import-fasta"])
+
+            assert "No FASTA files found" in result.output
+            assert Path("data/fasta_import/notes.txt").exists()
+
+
 class TestPersistenceAcrossInvocations:
 
     def test_data_persists_between_cli_calls(self, runner):
