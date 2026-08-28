@@ -25,7 +25,9 @@ dist/
 
 # Local application state
 data/lab_state.json
+data/fragment_templates.json
 data/fasta_import/
+data/exports/
 
 # IDE / editor files
 .vscode/

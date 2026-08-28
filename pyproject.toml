@@ -8,6 +8,7 @@ dependencies = [
     "click>=8.3.1",
     "pandas>=3.0.1",
     "pydantic>=2.12.5",
+    "openpyxl>=3.1.0",
 ]
 
 [dependency-groups]
@@ -18,3 +19,8 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+
+[tool.coverage.run]
+omit = [
+    "app/scripts/demo.py",
+]
