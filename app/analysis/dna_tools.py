@@ -55,3 +55,45 @@ def translate(sequence: str) -> str:
         protein += CODON_TABLE.get(codon, "X")
 
     return protein
+
+
+def find_fragment_positions(sequence: str, pattern: str) -> list[int]:
+    """
+    Return all 0-based start positions where pattern occurs in sequence.
+    Finds overlapping matches as well. Returns an empty list if pattern
+    is empty or not found.
+    """
+    if not pattern:
+        return []
+
+    positions = []
+    start = 0
+    while True:
+        index = sequence.find(pattern, start)
+        if index == -1:
+            break
+        positions.append(index)
+        start = index + 1
+
+    return positions
+
+
+def extract_region_after(sequence: str, recognition_sequence: str, region_length: int) -> str | None:
+    """
+    Find the first occurrence of recognition_sequence in sequence and
+    return the region_length bases immediately following it.
+
+    Returns None if recognition_sequence is not found, or if fewer than
+    region_length bases remain after the match.
+    """
+    index = sequence.find(recognition_sequence)
+    if index == -1:
+        return None
+
+    start = index + len(recognition_sequence)
+    end = start + region_length
+
+    if end > len(sequence):
+        return None
+
+    return sequence[start:end]

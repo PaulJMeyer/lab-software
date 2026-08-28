@@ -2,16 +2,21 @@ import click
 from pathlib import Path
 from datetime import datetime
 from pydantic import ValidationError
-from app.domain.models import Sample, validate_sample_id_format, validate_sample_dna_format
+from app.domain.models import Sample, FragmentTemplate, validate_sample_id_format, validate_sample_dna_format
 from app.services.lab_service import LabService
+from app.services.template_service import TemplateService
 from app.io.storage_json import save_samples, load_samples
+from app.io.template_storage import save_templates, load_templates
 from app.io.fasta_import import parse_fasta, generate_sample_id
-from app.analysis.dna_tools import reverse_complement, transcribe, translate
+from app.analysis.dna_tools import reverse_complement, transcribe, translate, find_fragment_positions, extract_region_after
+from app.io.export import export_to_csv, export_to_excel
 
 DATA_PATH = Path("data/lab_state.json")
+TEMPLATES_PATH = Path("data/fragment_templates.json")
 FASTA_IMPORT_DIR = Path("data/fasta_import")
 FASTA_PROCESSED_DIR = FASTA_IMPORT_DIR / "processed"
 FASTA_EXTENSIONS = {".fasta", ".fa"}
+EXPORT_DIR = Path("data/exports")
 
 # Available analyses: (field name on Sample, display label, function computing the result)
 ANALYSES = [
@@ -23,6 +28,12 @@ ANALYSES = [
 def get_service():
     service = LabService()
     loaded = load_samples(DATA_PATH)
+    service.set_state(loaded)
+    return service
+
+def get_template_service():
+    service = TemplateService()
+    loaded = load_templates(TEMPLATES_PATH)
     service.set_state(loaded)
     return service
 
@@ -39,6 +50,13 @@ def validate_dna_option(ctx, param, value):
         return validate_sample_dna_format(value)
     except ValueError as e:
         raise click.BadParameter(str(e))
+
+def _dna_value_proc(value):
+    """click.prompt value_proc: validates a DNA sequence, reprompting on invalid input."""
+    try:
+        return validate_sample_dna_format(value)
+    except ValueError as e:
+        raise click.UsageError(str(e))
 
 @click.group()
 def cli():
@@ -201,6 +219,124 @@ def import_fasta():
         file_path.rename(destination)
 
     click.echo(f"\nImport complete: {total_imported} sample(s) imported, {total_failed} failed.")
+
+@cli.command(name="add-template")
+@click.option("--name", "name", required=True, prompt="Template name (e.g. gene name)", help="Name of the template")
+@click.option("--recognition", "recognition_sequence", required=True, prompt="Recognition sequence", callback=validate_dna_option, help="DNA sequence to search for in a sample")
+@click.option("--wildtype", "wildtype_sequence", required=True, prompt="Wildtype sequence (region directly after the recognition sequence)", callback=validate_dna_option, help="Expected wildtype sequence directly following the recognition sequence")
+def add_template(name, recognition_sequence, wildtype_sequence):
+    """Create a fragment analysis template (independent of any sample)"""
+    service = get_template_service()
+    try:
+        template = FragmentTemplate(name=name, recognition_sequence=recognition_sequence, wildtype_sequence=wildtype_sequence)
+        service.add_template(template)
+        save_templates(TEMPLATES_PATH, service.get_state())
+        click.echo(click.style(f"✓ Template '{template.name}' added successfully.", fg="green"))
+    except (ValidationError, ValueError) as e:
+        click.echo(click.style(f"✗ Error: {e}", fg="red"))
+
+@cli.command(name="list-templates")
+def list_templates():
+    """List all fragment analysis templates"""
+    service = get_template_service()
+    templates = service.list_templates()
+    if not templates:
+        click.echo("No templates available. Use 'add-template' to create one.")
+        return
+    click.echo(f"\n{'Name':<20} {'Recognition sequence':<25} {'Wildtype sequence'}")
+    click.echo("-" * 70)
+    for t in templates:
+        click.echo(f"{t.name:<20} {t.recognition_sequence:<25} {t.wildtype_sequence}")
+    click.echo(f"\n{len(templates)} template(s) total.")
+
+@cli.command(name="search-fragment")
+@click.option("--id", "sample_id", required=True, prompt="Sample ID", help="Sample ID to search in")
+def search_fragment(sample_id):
+    """Search a sample for a DNA fragment: either a sequence you enter, or a saved template"""
+    service = get_service()
+    sample = service.find_sample(sample_id)
+    if sample is None:
+        click.echo(click.style(f"✗ No sample found with ID '{sample_id}'.", fg="red"))
+        return
+
+    mode = click.prompt(
+        "Search mode: (1) Enter a sequence  (2) Use a saved template",
+        type=click.IntRange(1, 2),
+    )
+
+    if mode == 1:
+        sequence = click.prompt("Sequence to search for", value_proc=_dna_value_proc)
+        positions = find_fragment_positions(sample.sample_dna, sequence)
+        if not positions:
+            click.echo(click.style(f"✗ Sequence not found in sample '{sample_id}'.", fg="red"))
+        else:
+            one_based = [p + 1 for p in positions]
+            click.echo(click.style(f"✓ Found at position(s): {', '.join(str(p) for p in one_based)}", fg="green"))
+        return
+
+    template_service = get_template_service()
+    templates = template_service.list_templates()
+    if not templates:
+        click.echo("No templates available. Use 'add-template' to create one.")
+        return
+
+    click.echo("\nAvailable templates:")
+    for i, t in enumerate(templates, start=1):
+        click.echo(f"{i}. {t.name}")
+    choice = click.prompt("Select a template", type=click.IntRange(1, len(templates)))
+    template = templates[choice - 1]
+
+    region = extract_region_after(
+        sample.sample_dna, template.recognition_sequence, len(template.wildtype_sequence)
+    )
+
+    if region is None:
+        click.echo(click.style(
+            f"✗ Recognition sequence not found in sample '{sample_id}' "
+            "(or not enough sequence remains after the match).", fg="red"
+        ))
+        return
+
+    is_wildtype = region == template.wildtype_sequence
+    status = "Wildtype" if is_wildtype else "Mutant"
+    click.echo(f"\nTemplate:             {template.name}")
+    click.echo(f"Recognition sequence: {template.recognition_sequence}")
+    click.echo(f"Region found:         {region}")
+    click.echo(f"Wildtype reference:   {template.wildtype_sequence}")
+    click.echo(click.style(f"Result:               {status}", fg="green" if is_wildtype else "yellow"))
+
+@cli.command()
+@click.option(
+    "--format", "export_format",
+    type=click.Choice(["csv", "xlsx", "both"]),
+    default="both",
+    help="Export format",
+)
+def export(export_format):
+    """Export all samples (ID and DNA sequence) to data/exports/"""
+    service = get_service()
+    samples = service.list_samples()
+
+    if not samples:
+        click.echo("No samples to export.")
+        return
+
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    written_paths = []
+
+    if export_format in ("csv", "both"):
+        csv_path = EXPORT_DIR / f"lab_samples_{timestamp}.csv"
+        export_to_csv(samples, csv_path)
+        written_paths.append(csv_path)
+
+    if export_format in ("xlsx", "both"):
+        xlsx_path = EXPORT_DIR / f"lab_samples_{timestamp}.xlsx"
+        export_to_excel(samples, xlsx_path)
+        written_paths.append(xlsx_path)
+
+    for path in written_paths:
+        click.echo(click.style(f"✓ Exported {len(samples)} sample(s) to '{path}'.", fg="green"))
 
 if __name__ == "__main__":  # pragma: no cover
     cli()

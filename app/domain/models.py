@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 VALID_DNA_CHARS = set("ACGTNRYKMSWBDHV-")
 
@@ -32,6 +32,14 @@ def validate_sample_dna_format(value: str) -> str:
     return normalized
 
 
+def validate_template_name_format(value: str) -> str:
+    """Validate a fragment template name and return it. Raises ValueError if invalid."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("Template name must not be empty.")
+    return stripped
+
+
 class Sample(BaseModel):
     sample_id: str
     sample_dna: str
@@ -51,3 +59,31 @@ class Sample(BaseModel):
 
     def __repr__(self):
         return str((self.sample_id, len(self.sample_dna)))
+
+
+class FragmentTemplate(BaseModel):
+    """
+    A reusable template for fragment/mutation analysis: a recognition
+    sequence to search for in a sample, and the expected wildtype sequence
+    of the region directly following it. Used by the 'search-fragment'
+    CLI command to determine whether a sample matches wildtype or carries
+    a mutation at that position.
+    """
+    name: str = Field(min_length=1)
+    recognition_sequence: str
+    wildtype_sequence: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return validate_template_name_format(value)
+
+    @field_validator("recognition_sequence")
+    @classmethod
+    def validate_recognition_sequence(cls, value: str) -> str:
+        return validate_sample_dna_format(value)
+
+    @field_validator("wildtype_sequence")
+    @classmethod
+    def validate_wildtype_sequence(cls, value: str) -> str:
+        return validate_sample_dna_format(value)

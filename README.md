@@ -14,6 +14,9 @@ A lightweight command-line application for managing biological lab samples. Supp
 - Analyze a sample interactively: reverse complement, RNA transcription, and protein translation
 - Analysis results are stored on the sample and persisted to JSON
 - Import samples from FASTA files (single or multi-record) dropped into a designated directory
+- Search a sample for a DNA fragment: enter a sequence directly, or use a saved recognition/wildtype template to detect wildtype vs. mutant
+- Create reusable fragment templates independently of any sample
+- Export all samples (ID and DNA) to CSV and/or Excel
 - Persistent storage via JSON file
 - Duplicate ID prevention
 
@@ -45,6 +48,22 @@ python -m app.main analyze --id "123456789"
 
 # Import samples from FASTA files
 python -m app.main import-fasta
+
+# Create a fragment analysis template
+python -m app.main add-template --name "Gene X" --recognition "ACGTACGT" --wildtype "TTTT"
+
+# List fragment templates
+python -m app.main list-templates
+
+# Search a sample for a DNA fragment (sequence or template)
+python -m app.main search-fragment --id "123456789"
+
+# Export all samples to CSV and Excel (default: both)
+python -m app.main export
+
+# Export to a specific format only
+python -m app.main export --format csv
+python -m app.main export --format xlsx
 ```
 
 ### Interactive analysis
@@ -83,6 +102,45 @@ Import complete: 2 sample(s) imported, 0 failed.
 ```
 
 Records with invalid DNA characters are skipped and reported, without stopping the rest of the import. Successfully processed files are moved into `data/fasta_import/processed/` (timestamped) so they aren't imported again; a file with no valid FASTA records is left in place and reported. Analyses are **not** run automatically on imported samples — use `analyze` afterwards.
+
+### Fragment search & templates
+
+`search-fragment --id <id>` searches a sample's DNA in one of two modes:
+
+1. **Enter a sequence** — type a DNA sequence to search for; every match position in the sample is reported (or "not found"). This is a plain presence/position check, with no wildtype comparison.
+2. **Use a saved template** — pick from your saved templates. The tool locates the template's recognition sequence in the sample, takes the region immediately following it (same length as the template's wildtype sequence), and compares it exactly: a match reports **Wildtype**, any difference reports **Mutant**.
+
+Templates are created independently with their own command, ahead of any specific sample:
+
+```bash
+python -m app.main add-template --name "Gene X" --recognition "ACGTACGT" --wildtype "TTTT"
+```
+
+- **Name** — a free-text label (e.g. a gene name)
+- **Recognition sequence** — the DNA sequence to search for in a sample
+- **Wildtype sequence** — the expected sequence of the region directly following the recognition sequence; also defines how many bases are compared
+
+```
+Available templates:
+1. Gene X
+Select a template: 1
+
+Template:             Gene X
+Recognition sequence: ACGTACGT
+Region found:         GGGG
+Wildtype reference:   TTTT
+Result:               Mutant
+```
+
+This is intended as groundwork for future mutation-analysis workflows. Fragment search results are shown live and are **not** currently stored on the sample (unlike `analyze`'s reverse complement/transcription/translation, which are persisted).
+
+### Export
+
+```bash
+python -m app.main export
+```
+
+Writes all samples' ID and DNA sequence to timestamped files in `data/exports/` — `lab_samples_<timestamp>.csv` and `.xlsx` by default, or only one via `--format csv` / `--format xlsx`. Each run creates new files rather than overwriting previous exports. Currently exports base sample data only; derived analysis results and fragment-search/mutation-match data are not included yet (see roadmap).
 
 ---
 
@@ -125,10 +183,12 @@ Tests run automatically on every push and pull request via GitHub Actions; the c
   - [x] Reverse complement
   - [x] Transcription
   - [x] Translation (with start/stop codon detection)
-  - [ ] Search for DNA fragments
+  - [x] Search for DNA fragments (free sequence + reusable templates for wildtype/mutant comparison)
 - [x] FASTA import: drop FASTA files into a designated directory to have them registered
+- [ ] Template management: update/delete templates
+- [x] Export (CSV, Excel): base sample data
+  - [ ] Include derived analysis fields / mutation-match results in export
 - [ ] Perspective: direct download from bioinformatics databases (e.g. NCBI, ENA)
-- [ ] Export (CSV, Excel)
 
 ---
 
@@ -139,5 +199,6 @@ Tests run automatically on every push and pull request via GitHub Actions; the c
 | click    | ≥ 8.3.1  |
 | pandas   | ≥ 3.0.1  |
 | pydantic | ≥ 2.12.5 |
+| openpyxl | ≥ 3.1.0  |
 
 Dev dependencies (testing): `pytest`, `pytest-cov`.

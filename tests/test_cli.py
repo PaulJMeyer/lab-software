@@ -275,6 +275,169 @@ class TestImportFastaCommand:
             assert Path("data/fasta_import/notes.txt").exists()
 
 
+class TestAddTemplateCommand:
+
+    def test_add_valid_template_succeeds(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            assert result.exit_code == 0
+            assert "added successfully" in result.output
+
+    def test_add_template_invalid_recognition_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGTX", "--wildtype", "TTTT"])
+            assert result.exit_code == 2
+            assert "Error" in result.output
+
+    def test_add_template_duplicate_name_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            result = runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "GGGG", "--wildtype", "CCCC"])
+            assert "Error" in result.output
+
+    def test_add_template_reprompts_for_invalid_recognition_sequence(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["add-template"], input="Gene X\nXYZ\nACGT\nTTTT\n")
+            assert result.exit_code == 0
+            assert "added successfully" in result.output
+            assert "Invalid characters in DNA sequence" in result.output
+
+
+class TestListTemplatesCommand:
+
+    def test_list_with_no_templates(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["list-templates"])
+            assert "No templates available" in result.output
+
+    def test_list_shows_added_template(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            result = runner.invoke(cli, ["list-templates"])
+            assert "Gene X" in result.output
+            assert "1 template(s) total" in result.output
+
+
+class TestSearchFragmentCommand:
+
+    def test_unknown_sample_shows_error(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["search-fragment", "--id", "999999999"], input="1\nACGT\n")
+            assert "No sample found" in result.output
+
+    def test_mode_1_finds_positions(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "AAACGTAAA"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="1\nACGT\n")
+            assert "Found at position(s): 3" in result.output
+
+    def test_mode_1_sequence_not_found(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "AAAAAAAA"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="1\nTTTT\n")
+            assert "not found" in result.output
+
+    def test_mode_1_reprompts_on_invalid_sequence(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGTACGT"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="1\nXYZ\nACGT\n")
+            assert "Invalid characters in DNA sequence" in result.output
+            assert "Found at position(s)" in result.output
+
+    def test_mode_2_no_templates_available(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="2\n")
+            assert "No templates available" in result.output
+
+    def test_mode_2_detects_wildtype(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "GGACGTTTTTCC"])
+            runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="2\n1\n")
+            assert "Result:               Wildtype" in result.output
+
+    def test_mode_2_detects_mutant(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "GGACGTGGGGCC"])
+            runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="2\n1\n")
+            assert "Result:               Mutant" in result.output
+
+    def test_mode_2_recognition_sequence_not_found(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "GGGGCCCC"])
+            runner.invoke(cli, ["add-template", "--name", "Gene X", "--recognition", "ACGT", "--wildtype", "TTTT"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="2\n1\n")
+            assert "Recognition sequence not found" in result.output
+
+    def test_invalid_mode_choice_is_rejected(self, runner):
+        with runner.isolated_filesystem():
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "AAACGTAAA"])
+            result = runner.invoke(cli, ["search-fragment", "--id", "123456789"], input="9\n1\nACGT\n")
+            assert result.exit_code == 0
+            assert "Found at position(s)" in result.output
+
+
+class TestExportCommand:
+
+    def test_export_with_no_samples(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["export"])
+            assert "No samples to export" in result.output
+
+    def test_export_default_creates_both_formats(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+
+            result = runner.invoke(cli, ["export"])
+
+            assert "Exported 1 sample(s)" in result.output
+            csv_files = list(Path("data/exports").glob("*.csv"))
+            xlsx_files = list(Path("data/exports").glob("*.xlsx"))
+            assert len(csv_files) == 1
+            assert len(xlsx_files) == 1
+
+    def test_export_csv_only(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+
+            runner.invoke(cli, ["export", "--format", "csv"])
+
+            assert len(list(Path("data/exports").glob("*.csv"))) == 1
+            assert len(list(Path("data/exports").glob("*.xlsx"))) == 0
+
+    def test_export_xlsx_only(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+
+            runner.invoke(cli, ["export", "--format", "xlsx"])
+
+            assert len(list(Path("data/exports").glob("*.csv"))) == 0
+            assert len(list(Path("data/exports").glob("*.xlsx"))) == 1
+
+    def test_export_contains_correct_data(self, runner):
+        with runner.isolated_filesystem():
+            from pathlib import Path
+            import pandas as pd
+            runner.invoke(cli, ["add", "--id", "123456789", "--dna", "ACGT"])
+
+            runner.invoke(cli, ["export", "--format", "csv"])
+
+            csv_file = list(Path("data/exports").glob("*.csv"))[0]
+            df = pd.read_csv(csv_file)
+            assert df.iloc[0]["sample_id"] == 123456789
+            assert df.iloc[0]["sample_dna"] == "ACGT"
+
+    def test_export_invalid_format_is_rejected(self, runner):
+        with runner.isolated_filesystem():
+            result = runner.invoke(cli, ["export", "--format", "pdf"])
+            assert result.exit_code == 2
+
+
 class TestPersistenceAcrossInvocations:
 
     def test_data_persists_between_cli_calls(self, runner):

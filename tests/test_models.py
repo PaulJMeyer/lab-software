@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.domain.models import Sample
+from app.domain.models import Sample, FragmentTemplate
 
 
 class TestSampleId:
@@ -80,3 +80,37 @@ class TestSampleDerivedFields:
         assert sample.reverse_complement == "ACGT"
         assert sample.rna_transcript == "ACGU"
         assert sample.protein == "M"
+
+
+class TestFragmentTemplate:
+
+    def test_valid_template_accepted(self):
+        template = FragmentTemplate(name="Gene X", recognition_sequence="ACGT", wildtype_sequence="TTTT")
+        assert template.name == "Gene X"
+        assert template.recognition_sequence == "ACGT"
+        assert template.wildtype_sequence == "TTTT"
+
+    def test_empty_name_raises(self):
+        with pytest.raises(ValidationError):
+            FragmentTemplate(name="", recognition_sequence="ACGT", wildtype_sequence="TTTT")
+
+    def test_whitespace_only_name_raises(self):
+        with pytest.raises(ValidationError):
+            FragmentTemplate(name="   ", recognition_sequence="ACGT", wildtype_sequence="TTTT")
+
+    def test_name_is_stripped(self):
+        template = FragmentTemplate(name="  Gene X  ", recognition_sequence="ACGT", wildtype_sequence="TTTT")
+        assert template.name == "Gene X"
+
+    def test_invalid_recognition_sequence_raises(self):
+        with pytest.raises(ValidationError):
+            FragmentTemplate(name="Gene X", recognition_sequence="ACGTX", wildtype_sequence="TTTT")
+
+    def test_invalid_wildtype_sequence_raises(self):
+        with pytest.raises(ValidationError):
+            FragmentTemplate(name="Gene X", recognition_sequence="ACGT", wildtype_sequence="TTTTX")
+
+    def test_recognition_and_wildtype_normalized_to_uppercase(self):
+        template = FragmentTemplate(name="Gene X", recognition_sequence="acgt", wildtype_sequence="tttt")
+        assert template.recognition_sequence == "ACGT"
+        assert template.wildtype_sequence == "TTTT"
